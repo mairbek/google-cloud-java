@@ -29,7 +29,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.google.api.client.googleapis.json.GoogleJsonError;
 import com.google.api.core.ApiClock;
-import com.google.api.gax.core.Page;
+import com.google.api.gax.paging.Page;
 import com.google.api.services.storage.model.Policy.Bindings;
 import com.google.api.services.storage.model.StorageObject;
 import com.google.api.services.storage.model.TestIamPermissionsResponse;
@@ -38,6 +38,7 @@ import com.google.cloud.Identity;
 import com.google.cloud.Policy;
 import com.google.cloud.ReadChannel;
 import com.google.cloud.ServiceOptions;
+import com.google.cloud.Tuple;
 import com.google.cloud.WriteChannel;
 import com.google.cloud.storage.Acl.Project;
 import com.google.cloud.storage.Acl.Project.ProjectRole;
@@ -51,7 +52,6 @@ import com.google.cloud.storage.Storage.CopyRequest;
 import com.google.cloud.storage.spi.StorageRpcFactory;
 import com.google.cloud.storage.spi.v1.RpcBatch;
 import com.google.cloud.storage.spi.v1.StorageRpc;
-import com.google.cloud.storage.spi.v1.StorageRpc.Tuple;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -1293,7 +1293,7 @@ public class StorageImplTest {
     byte[] result = new byte[DEFAULT_CHUNK_SIZE];
     EasyMock.expect(
             storageRpcMock.read(BLOB_INFO2.toPb(), BLOB_SOURCE_OPTIONS, 0, DEFAULT_CHUNK_SIZE))
-        .andReturn(StorageRpc.Tuple.of("etag", result));
+        .andReturn(Tuple.of("etag", result));
     EasyMock.replay(storageRpcMock);
     initializeService();
     ReadChannel channel =
@@ -1309,7 +1309,7 @@ public class StorageImplTest {
     byte[] result = new byte[DEFAULT_CHUNK_SIZE];
     EasyMock.expect(
             storageRpcMock.read(BLOB_INFO2.toPb(), ENCRYPTION_KEY_OPTIONS, 0, DEFAULT_CHUNK_SIZE))
-        .andReturn(StorageRpc.Tuple.of("etag", result))
+        .andReturn(Tuple.of("etag", result))
         .times(2);
     EasyMock.replay(storageRpcMock);
     initializeService();
@@ -1330,7 +1330,7 @@ public class StorageImplTest {
     EasyMock.expect(
             storageRpcMock.read(
                 BLOB_INFO1.getBlobId().toPb(), BLOB_SOURCE_OPTIONS, 0, DEFAULT_CHUNK_SIZE))
-        .andReturn(StorageRpc.Tuple.of("etag", result));
+        .andReturn(Tuple.of("etag", result));
     EasyMock.replay(storageRpcMock);
     initializeService();
     ReadChannel channel =

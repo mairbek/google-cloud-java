@@ -24,11 +24,11 @@ import com.google.api.core.ApiFuture;
 import com.google.api.gax.batching.BatchingSettings;
 import com.google.api.gax.batching.PartitionKey;
 import com.google.api.gax.batching.RequestBuilder;
-import com.google.api.gax.core.FlowControlSettings;
-import com.google.api.gax.core.FlowController.LimitExceededBehavior;
+import com.google.api.gax.batching.FlowControlSettings;
+import com.google.api.gax.batching.FlowController.LimitExceededBehavior;
 import com.google.api.gax.core.GoogleCredentialsProvider;
 import com.google.api.gax.core.PropertiesProvider;
-import com.google.api.gax.core.RetrySettings;
+import com.google.api.gax.retrying.RetrySettings;
 import com.google.api.gax.grpc.BatchedRequestIssuer;
 import com.google.api.gax.grpc.BatchingCallSettings;
 import com.google.api.gax.grpc.BatchingDescriptor;
@@ -65,8 +65,9 @@ import com.google.protobuf.ExperimentalApi;
 import io.grpc.Status;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
 import javax.annotation.Generated;
-import org.joda.time.Duration;
+import org.threeten.bp.Duration;
 
 // AUTO-GENERATED DOCUMENTATION AND CLASS
 /**
@@ -89,7 +90,7 @@ import org.joda.time.Duration;
  * LoggingSettings.Builder loggingSettingsBuilder =
  *     LoggingSettings.defaultBuilder();
  * loggingSettingsBuilder.deleteLogSettings().getRetrySettingsBuilder()
- *     .setTotalTimeout(Duration.standardSeconds(30));
+ *     .setTotalTimeout(Duration.ofSeconds(30));
  * LoggingSettings loggingSettings = loggingSettingsBuilder.build();
  * </code>
  * </pre>
@@ -209,7 +210,7 @@ public class LoggingSettings extends ClientSettings {
   }
 
   /** Returns the default service scopes. */
-  public static ImmutableList<String> getDefaultServiceScopes() {
+  public static List<String> getDefaultServiceScopes() {
     return DEFAULT_SERVICE_SCOPES;
   }
 
@@ -539,23 +540,23 @@ public class LoggingSettings extends ClientSettings {
       RetrySettings.Builder settingsBuilder = null;
       settingsBuilder =
           RetrySettings.newBuilder()
-              .setInitialRetryDelay(Duration.millis(100L))
+              .setInitialRetryDelay(Duration.ofMillis(100L))
               .setRetryDelayMultiplier(1.2)
-              .setMaxRetryDelay(Duration.millis(1000L))
-              .setInitialRpcTimeout(Duration.millis(2000L))
+              .setMaxRetryDelay(Duration.ofMillis(1000L))
+              .setInitialRpcTimeout(Duration.ofMillis(2000L))
               .setRpcTimeoutMultiplier(1.5)
-              .setMaxRpcTimeout(Duration.millis(30000L))
-              .setTotalTimeout(Duration.millis(45000L));
+              .setMaxRpcTimeout(Duration.ofMillis(30000L))
+              .setTotalTimeout(Duration.ofMillis(45000L));
       definitions.put("default", settingsBuilder);
       settingsBuilder =
           RetrySettings.newBuilder()
-              .setInitialRetryDelay(Duration.millis(100L))
+              .setInitialRetryDelay(Duration.ofMillis(100L))
               .setRetryDelayMultiplier(1.2)
-              .setMaxRetryDelay(Duration.millis(1000L))
-              .setInitialRpcTimeout(Duration.millis(7000L))
+              .setMaxRetryDelay(Duration.ofMillis(1000L))
+              .setInitialRpcTimeout(Duration.ofMillis(7000L))
               .setRpcTimeoutMultiplier(1.5)
-              .setMaxRpcTimeout(Duration.millis(30000L))
-              .setTotalTimeout(Duration.millis(45000L));
+              .setMaxRpcTimeout(Duration.ofMillis(30000L))
+              .setTotalTimeout(Duration.ofMillis(45000L));
       definitions.put("list", settingsBuilder);
       RETRY_PARAM_DEFINITIONS = definitions.build();
     }
@@ -601,7 +602,7 @@ public class LoggingSettings extends ClientSettings {
           .getBatchingSettingsBuilder()
           .setElementCountThreshold(1000L)
           .setRequestByteThreshold(1048576L)
-          .setDelayThreshold(Duration.millis(50))
+          .setDelayThreshold(Duration.ofMillis(50))
           .setFlowControlSettings(
               FlowControlSettings.newBuilder()
                   .setMaxOutstandingElementCount(100000)

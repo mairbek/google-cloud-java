@@ -18,8 +18,8 @@ package com.google.cloud.pubsub.spi.v1;
 
 import com.google.api.core.AbstractApiService;
 import com.google.api.core.ApiClock;
-import com.google.api.gax.core.FlowController;
-import com.google.api.stats.Distribution;
+import com.google.api.gax.batching.FlowController;
+import com.google.api.gax.core.Distribution;
 import com.google.cloud.pubsub.spi.v1.MessageDispatcher.AckProcessor;
 import com.google.cloud.pubsub.spi.v1.MessageDispatcher.PendingModifyAckDeadline;
 import com.google.common.collect.Lists;
@@ -40,17 +40,18 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.joda.time.Duration;
+import javax.annotation.Nullable;
+import org.threeten.bp.Duration;
 
 /**
  * Implementation of {@link AckProcessor} based on Cloud Pub/Sub pull and acknowledge operations.
  */
 final class PollingSubscriberConnection extends AbstractApiService implements AckProcessor {
   private static final int MAX_PER_REQUEST_CHANGES = 1000;
-  private static final Duration DEFAULT_TIMEOUT = Duration.standardSeconds(10);
+  private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
   private static final int DEFAULT_MAX_MESSAGES = 1000;
-  private static final Duration INITIAL_BACKOFF = Duration.millis(100); // 100ms
-  private static final Duration MAX_BACKOFF = Duration.standardSeconds(10); // 10s
+  private static final Duration INITIAL_BACKOFF = Duration.ofMillis(100); // 100ms
+  private static final Duration MAX_BACKOFF = Duration.ofSeconds(10); // 10s
 
   private static final Logger logger =
       Logger.getLogger(PollingSubscriberConnection.class.getName());
@@ -59,6 +60,7 @@ final class PollingSubscriberConnection extends AbstractApiService implements Ac
   private final ScheduledExecutorService executor;
   private final SubscriberFutureStub stub;
   private final MessageDispatcher messageDispatcher;
+  private final int maxDesiredPulledMessages;
 
   public PollingSubscriberConnection(
       String subscription,
@@ -68,7 +70,9 @@ final class PollingSubscriberConnection extends AbstractApiService implements Ac
       Distribution ackLatencyDistribution,
       Channel channel,
       FlowController flowController,
+      @Nullable Integer maxDesiredPulledMessages,
       ScheduledExecutorService executor,
+      @Nullable ScheduledExecutorService alarmsExecutor,
       ApiClock clock) {
     this.subscription = subscription;
     this.executor = executor;
@@ -82,8 +86,11 @@ final class PollingSubscriberConnection extends AbstractApiService implements Ac
             ackLatencyDistribution,
             flowController,
             executor,
+            alarmsExecutor,
             clock);
     messageDispatcher.setMessageDeadlineSeconds(Subscriber.MIN_ACK_DEADLINE_SECONDS);
+    this.maxDesiredPulledMessages =
+        maxDesiredPulledMessages != null ? maxDesiredPulledMessages : DEFAULT_MAX_MESSAGES;
   }
 
   @Override
@@ -95,7 +102,7 @@ final class PollingSubscriberConnection extends AbstractApiService implements Ac
 
   private void initialize() {
     ListenableFuture<Subscription> subscriptionInfo =
-        stub.withDeadlineAfter(DEFAULT_TIMEOUT.getMillis(), TimeUnit.MILLISECONDS)
+        stub.withDeadlineAfter(DEFAULT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
             .getSubscription(
                 GetSubscriptionRequest.newBuilder().setSubscription(subscription).build());
 
@@ -112,7 +119,8 @@ final class PollingSubscriberConnection extends AbstractApiService implements Ac
           public void onFailure(Throwable cause) {
             notifyFailed(cause);
           }
-        });
+        },
+        executor);
   }
 
   @Override
@@ -123,11 +131,11 @@ final class PollingSubscriberConnection extends AbstractApiService implements Ac
 
   private void pullMessages(final Duration backoff) {
     ListenableFuture<PullResponse> pullResult =
-        stub.withDeadlineAfter(DEFAULT_TIMEOUT.getMillis(), TimeUnit.MILLISECONDS)
+        stub.withDeadlineAfter(DEFAULT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
             .pull(
                 PullRequest.newBuilder()
                     .setSubscription(subscription)
-                    .setMaxMessages(DEFAULT_MAX_MESSAGES)
+                    .setMaxMessages(maxDesiredPulledMessages)
                     .setReturnImmediately(true)
                     .build());
 
@@ -136,7 +144,6 @@ final class PollingSubscriberConnection extends AbstractApiService implements Ac
         new FutureCallback<PullResponse>() {
           @Override
           public void onSuccess(PullResponse pullResponse) {
-            messageDispatcher.processReceivedMessages(pullResponse.getReceivedMessagesList());
             if (pullResponse.getReceivedMessagesCount() == 0) {
               // No messages in response, possibly caught up in backlog, we backoff to avoid
               // slamming the server.
@@ -145,17 +152,24 @@ final class PollingSubscriberConnection extends AbstractApiService implements Ac
                     @Override
                     public void run() {
                       Duration newBackoff = backoff.multipliedBy(2);
-                      if (newBackoff.isLongerThan(MAX_BACKOFF)) {
+                      if (newBackoff.compareTo(MAX_BACKOFF) > 0) {
                         newBackoff = MAX_BACKOFF;
                       }
                       pullMessages(newBackoff);
                     }
                   },
-                  backoff.getMillis(),
+                  backoff.toMillis(),
                   TimeUnit.MILLISECONDS);
               return;
             }
-            pullMessages(INITIAL_BACKOFF);
+            messageDispatcher.processReceivedMessages(
+                pullResponse.getReceivedMessagesList(),
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    pullMessages(INITIAL_BACKOFF);
+                  }
+                });
           }
 
           @Override
@@ -166,26 +180,27 @@ final class PollingSubscriberConnection extends AbstractApiService implements Ac
               return;
             }
             if (StatusUtil.isRetryable(cause)) {
-              logger.log(Level.SEVERE, "Failed to pull messages (recoverable): ", cause);
+              logger.log(Level.WARNING, "Failed to pull messages (recoverable): ", cause);
               executor.schedule(
                   new Runnable() {
                     @Override
                     public void run() {
                       Duration newBackoff = backoff.multipliedBy(2);
-                      if (newBackoff.isLongerThan(MAX_BACKOFF)) {
+                      if (newBackoff.compareTo(MAX_BACKOFF) > 0) {
                         newBackoff = MAX_BACKOFF;
                       }
                       pullMessages(newBackoff);
                     }
                   },
-                  backoff.getMillis(),
+                  backoff.toMillis(),
                   TimeUnit.MILLISECONDS);
             } else {
               messageDispatcher.stop();
               notifyFailed(cause);
             }
           }
-        });
+        },
+        executor);
   }
 
   private boolean isAlive() {
@@ -200,7 +215,7 @@ final class PollingSubscriberConnection extends AbstractApiService implements Ac
     for (PendingModifyAckDeadline modifyAckDeadline : ackDeadlineExtensions) {
       for (List<String> ackIdChunk :
           Lists.partition(modifyAckDeadline.ackIds, MAX_PER_REQUEST_CHANGES)) {
-        stub.withDeadlineAfter(DEFAULT_TIMEOUT.getMillis(), TimeUnit.MILLISECONDS)
+        stub.withDeadlineAfter(DEFAULT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
             .modifyAckDeadline(
                 ModifyAckDeadlineRequest.newBuilder()
                     .setSubscription(subscription)
@@ -211,7 +226,7 @@ final class PollingSubscriberConnection extends AbstractApiService implements Ac
     }
 
     for (List<String> ackChunk : Lists.partition(acksToSend, MAX_PER_REQUEST_CHANGES)) {
-      stub.withDeadlineAfter(DEFAULT_TIMEOUT.getMillis(), TimeUnit.MILLISECONDS)
+      stub.withDeadlineAfter(DEFAULT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
           .acknowledge(
               AcknowledgeRequest.newBuilder()
                   .setSubscription(subscription)

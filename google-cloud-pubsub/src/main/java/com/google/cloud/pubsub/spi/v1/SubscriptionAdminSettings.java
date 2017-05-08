@@ -21,7 +21,7 @@ import static com.google.cloud.pubsub.spi.v1.PagedResponseWrappers.ListSubscript
 import com.google.api.core.ApiFuture;
 import com.google.api.gax.core.GoogleCredentialsProvider;
 import com.google.api.gax.core.PropertiesProvider;
-import com.google.api.gax.core.RetrySettings;
+import com.google.api.gax.retrying.RetrySettings;
 import com.google.api.gax.grpc.CallContext;
 import com.google.api.gax.grpc.ChannelProvider;
 import com.google.api.gax.grpc.ClientSettings;
@@ -70,8 +70,9 @@ import com.google.pubsub.v1.Subscription;
 import com.google.pubsub.v1.UpdateSubscriptionRequest;
 import io.grpc.Status;
 import java.io.IOException;
+import java.util.List;
 import javax.annotation.Generated;
-import org.joda.time.Duration;
+import org.threeten.bp.Duration;
 
 // AUTO-GENERATED DOCUMENTATION AND CLASS
 /**
@@ -94,7 +95,7 @@ import org.joda.time.Duration;
  * SubscriptionAdminSettings.Builder subscriptionAdminSettingsBuilder =
  *     SubscriptionAdminSettings.defaultBuilder();
  * subscriptionAdminSettingsBuilder.createSubscriptionSettings().getRetrySettingsBuilder()
- *     .setTotalTimeout(Duration.standardSeconds(30));
+ *     .setTotalTimeout(Duration.ofSeconds(30));
  * SubscriptionAdminSettings subscriptionAdminSettings = subscriptionAdminSettingsBuilder.build();
  * </code>
  * </pre>
@@ -364,7 +365,7 @@ public class SubscriptionAdminSettings extends ClientSettings {
   }
 
   /** Returns the default service scopes. */
-  public static ImmutableList<String> getDefaultServiceScopes() {
+  public static List<String> getDefaultServiceScopes() {
     return DEFAULT_SERVICE_SCOPES;
   }
 
@@ -602,23 +603,23 @@ public class SubscriptionAdminSettings extends ClientSettings {
       RetrySettings.Builder settingsBuilder = null;
       settingsBuilder =
           RetrySettings.newBuilder()
-              .setInitialRetryDelay(Duration.millis(100L))
+              .setInitialRetryDelay(Duration.ofMillis(100L))
               .setRetryDelayMultiplier(1.3)
-              .setMaxRetryDelay(Duration.millis(60000L))
-              .setInitialRpcTimeout(Duration.millis(60000L))
+              .setMaxRetryDelay(Duration.ofMillis(60000L))
+              .setInitialRpcTimeout(Duration.ofMillis(60000L))
               .setRpcTimeoutMultiplier(1.0)
-              .setMaxRpcTimeout(Duration.millis(60000L))
-              .setTotalTimeout(Duration.millis(600000L));
+              .setMaxRpcTimeout(Duration.ofMillis(60000L))
+              .setTotalTimeout(Duration.ofMillis(600000L));
       definitions.put("default", settingsBuilder);
       settingsBuilder =
           RetrySettings.newBuilder()
-              .setInitialRetryDelay(Duration.millis(100L))
+              .setInitialRetryDelay(Duration.ofMillis(100L))
               .setRetryDelayMultiplier(1.3)
-              .setMaxRetryDelay(Duration.millis(60000L))
-              .setInitialRpcTimeout(Duration.millis(12000L))
+              .setMaxRetryDelay(Duration.ofMillis(60000L))
+              .setInitialRpcTimeout(Duration.ofMillis(12000L))
               .setRpcTimeoutMultiplier(1.0)
-              .setMaxRpcTimeout(Duration.millis(12000L))
-              .setTotalTimeout(Duration.millis(600000L));
+              .setMaxRpcTimeout(Duration.ofMillis(12000L))
+              .setTotalTimeout(Duration.ofMillis(600000L));
       definitions.put("messaging", settingsBuilder);
       RETRY_PARAM_DEFINITIONS = definitions.build();
     }

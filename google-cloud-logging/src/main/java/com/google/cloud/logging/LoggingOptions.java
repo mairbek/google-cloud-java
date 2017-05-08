@@ -16,7 +16,8 @@
 
 package com.google.cloud.logging;
 
-import com.google.cloud.GrpcTransportOptions;
+import com.google.api.core.InternalApi;
+import com.google.cloud.grpc.GrpcTransportOptions;
 import com.google.cloud.ServiceDefaults;
 import com.google.cloud.ServiceOptions;
 import com.google.cloud.ServiceRpc;
@@ -96,6 +97,7 @@ public class LoggingOptions extends ServiceOptions<Logging, LoggingOptions> {
     }
   }
 
+  @InternalApi("This class should only be extended within google-cloud-java")
   protected LoggingOptions(Builder builder) {
     super(LoggingFactory.class, LoggingRpcFactory.class, builder, new LoggingDefaults());
   }
