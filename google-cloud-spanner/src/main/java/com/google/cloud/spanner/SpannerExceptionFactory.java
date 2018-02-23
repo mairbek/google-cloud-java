@@ -21,6 +21,7 @@ import static com.google.cloud.spanner.SpannerException.DoNotConstructDirectly;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Predicate;
 import io.grpc.Context;
+import io.grpc.Deadline;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import java.util.concurrent.CancellationException;
@@ -40,7 +41,7 @@ public final class SpannerExceptionFactory {
 
   public static SpannerException newSpannerException(
       ErrorCode code, @Nullable String message, @Nullable Throwable cause) {
-    return newSpannerExceptionPreformatted(code, formatMessage(code, message), cause);
+    return newSpannerExceptionPreformatted(code, formatMessage(code, message), cause, null);
   }
 
   public static SpannerException propagateInterrupt(InterruptedException e) {
@@ -67,8 +68,7 @@ public final class SpannerExceptionFactory {
    */
   public static SpannerException newSpannerException(@Nullable Context context, Throwable cause) {
     if (cause instanceof SpannerException) {
-      SpannerException e = (SpannerException) cause;
-      return newSpannerExceptionPreformatted(e.getErrorCode(), e.getMessage(), e);
+      return (SpannerException) cause;
     } else if (cause instanceof CancellationException) {
       return newSpannerExceptionForCancellation(context, cause);
     }
@@ -77,7 +77,10 @@ public final class SpannerExceptionFactory {
     if (status.getCode() == Status.Code.CANCELLED) {
       return newSpannerExceptionForCancellation(context, cause);
     }
-    return newSpannerException(ErrorCode.fromGrpcStatus(status), cause.getMessage(), cause);
+    ErrorCode code = ErrorCode.fromGrpcStatus(status);
+    Deadline deadline = context == null ? null : context.getDeadline();
+    return newSpannerExceptionPreformatted(code, formatMessage(code, cause.getMessage()), cause,
+        deadline);
   }
 
   static SpannerException newSpannerExceptionForCancellation(
@@ -108,19 +111,21 @@ public final class SpannerExceptionFactory {
     return message.startsWith(code.toString()) ? message : code + ": " + message;
   }
 
-  private static SpannerException newSpannerExceptionPreformatted(
-      ErrorCode code, @Nullable String message, @Nullable Throwable cause) {
+  private static SpannerException newSpannerExceptionPreformatted(ErrorCode code,
+      @Nullable String message, @Nullable Throwable cause, @Nullable Deadline deadline) {
     // This is the one place in the codebase that is allowed to call constructors directly.
     DoNotConstructDirectly token = DoNotConstructDirectly.ALLOWED;
     switch (code) {
       case ABORTED:
         return new AbortedException(token, message, cause);
       default:
-        return new SpannerException(token, code, isRetryable(code, cause), message, cause);
+        return new SpannerException(token, code, isRetryable(code, cause, deadline), message,
+            cause);
     }
   }
 
-  private static boolean isRetryable(ErrorCode code, @Nullable Throwable cause) {
+  private static boolean isRetryable(ErrorCode code, @Nullable Throwable cause, @Nullable
+      Deadline deadline) {
     switch (code) {
       case INTERNAL:
         return hasCauseMatching(cause, Matchers.isRetryableInternalError);
@@ -128,6 +133,8 @@ public final class SpannerExceptionFactory {
         return true;
       case RESOURCE_EXHAUSTED:
         return SpannerException.extractRetryDelay(cause) > 0;
+      case DEADLINE_EXCEEDED:
+        return deadline == null || !deadline.isExpired();
       default:
         return false;
     }

@@ -2269,7 +2269,7 @@ class SpannerImpl extends BaseService<SpannerOptions> implements Spanner {
       call = null;
 
       if (error != null) {
-        throw SpannerExceptionFactory.newSpannerException(error);
+        throw error;
       }
 
       endOfData();
