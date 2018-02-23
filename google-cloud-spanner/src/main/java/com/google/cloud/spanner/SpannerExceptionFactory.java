@@ -78,9 +78,8 @@ public final class SpannerExceptionFactory {
       return newSpannerExceptionForCancellation(context, cause);
     }
     ErrorCode code = ErrorCode.fromGrpcStatus(status);
-    Deadline deadline = context == null ? null : context.getDeadline();
     return newSpannerExceptionPreformatted(code, formatMessage(code, cause.getMessage()), cause,
-        deadline);
+        context);
   }
 
   static SpannerException newSpannerExceptionForCancellation(
@@ -112,20 +111,20 @@ public final class SpannerExceptionFactory {
   }
 
   private static SpannerException newSpannerExceptionPreformatted(ErrorCode code,
-      @Nullable String message, @Nullable Throwable cause, @Nullable Deadline deadline) {
+      @Nullable String message, @Nullable Throwable cause, @Nullable Context context) {
     // This is the one place in the codebase that is allowed to call constructors directly.
     DoNotConstructDirectly token = DoNotConstructDirectly.ALLOWED;
     switch (code) {
       case ABORTED:
         return new AbortedException(token, message, cause);
       default:
-        return new SpannerException(token, code, isRetryable(code, cause, deadline), message,
+        return new SpannerException(token, code, isRetryable(code, cause, context), message,
             cause);
     }
   }
 
   private static boolean isRetryable(ErrorCode code, @Nullable Throwable cause, @Nullable
-      Deadline deadline) {
+      Context context) {
     switch (code) {
       case INTERNAL:
         return hasCauseMatching(cause, Matchers.isRetryableInternalError);
@@ -134,7 +133,10 @@ public final class SpannerExceptionFactory {
       case RESOURCE_EXHAUSTED:
         return SpannerException.extractRetryDelay(cause) > 0;
       case DEADLINE_EXCEEDED:
-        return deadline == null || !deadline.isExpired();
+        if (context == null) {
+          return false;
+        }
+        return context.getDeadline() == null || !context.getDeadline().isExpired();
       default:
         return false;
     }
